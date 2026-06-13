@@ -4,56 +4,61 @@ from telebot import types
 TOKEN = ''
 bot = telebot.TeleBot(TOKEN)
 
-# Хранилище завдань пам'яті бота 
+# Сховище завдань (Зошит) у пам'яті бота 
 USER_TASKS = {}
 
+#квіз
 QUIZ = [
     {
-        "question": "1/3. Яку мову найчастіше використовують для ботів?",
-        "options": ["Java", "Python", "C++"],
-        "right": "Python"
+        "question": "📓 1/3. Скільки секунд є у людини, щоб вписати причину смерті після імені?",
+        "options": ["40 секунд", "60 секунд", "5 хвилин"],
+        "right_index": 0  # "40 секунд"
     },
     {
-        "question": "2/3. Що з цього НЕ є типом даних у Python?",
-        "options": ["Integer", "String", "Notebook"],
-        "right": "Notebook"
+        "question": "🍎 2/3. Які фрукти найбільше обожнює бог смерті Рюк?",
+        "options": ["Банани", "Апельсини", "Яблука"],
+        "right_index": 2  # "Яблука"
     },
     {
-        "question": "3/3. Як розшифровується КПІ?",
-        "options": ["Київський політехнічний інститут", "Критичні показники"],
-        "right": "Київський політехнічний інститут"
+        "question": "🎓 3/3. Хто є головним ворогом Лайта Ягамі в розслідуванні?",
+        "options": ["Поліція КПІ", "Детектив L", "Рюук"],
+        "right_index": 1  # "Детектив L"
     }
 ]
 
 def main_menu():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add(types.KeyboardButton("📋 Мої завдання"), types.KeyboardButton("➕ Додати завдання"))
-    markup.add(types.KeyboardButton("📝 Пройти тест"))
+    markup.add(types.KeyboardButton("📓 Зошит завдань"), types.KeyboardButton("➕ Вписати завдання"))
+    markup.add(types.KeyboardButton("👁️ Угода з Богом Смерті (Тест)"))
     return markup
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.send_message(message.chat.id, "Привіт! Оберіть дію:", reply_markup=main_menu())
+    bot.send_message(
+        message.chat.id, 
+        f"Привіт, {message.from_user.first_name}. Я твій бог смерті. Які завдання запишемо в зошит сьогодні?", 
+        reply_markup=main_menu()
+    )
 
 @bot.message_handler(content_types=['text'])
 def handle_menu(message):
     user_id = message.chat.id
     
-    if message.text == "📋 Мої завдання":
+    if message.text == "📓 Зошит завдань":
         tasks = USER_TASKS.get(user_id, [])
         if not tasks:
-            bot.send_message(user_id, "У вас поки немає завдань!")
+            bot.send_message(user_id, "Твій зошит поки що порожній. Жодного завдання не записано.")
         else:
-            text = "📋 **Ваші завдання:**\n\n"
+            text = "📓 **Записані в зошит завдання:**\n\n"
             for i, task in enumerate(tasks, 1):
                 text += f"{i}. {task}\n"
             bot.send_message(user_id, text, parse_mode="Markdown")
             
-    elif message.text == "➕ Додати завдання":
-        msg = bot.send_message(user_id, "Введіть текст завдання:")
+    elif message.text == "➕ Вписати завдання":
+        msg = bot.send_message(user_id, "Введіть назву завдання, яке потрібно виконати:")
         bot.register_next_step_handler(msg, save_new_task)
         
-    elif message.text == "📝 Пройти тест":
+    elif message.text == "👁️ Угода з Богом Смерті (Тест)":
         start_quiz(user_id, 0, 0)
 
 def save_new_task(message):
@@ -64,17 +69,19 @@ def save_new_task(message):
         USER_TASKS[user_id] = []
     
     USER_TASKS[user_id].append(task_text)
-    bot.send_message(user_id, f"✅ Завдання «{task_text}» додано!", reply_markup=main_menu())
+    bot.send_message(user_id, f"✒️ Завдання «{task_text}» успішно вписано в зошит!", reply_markup=main_menu())
 
 def start_quiz(chat_id, q_index, score):
     if q_index >= len(QUIZ):
-        bot.send_message(chat_id, f"🏁 **Тест завершено!**\nПравильних відповідей: {score} з {len(QUIZ)}")
+        bot.send_message(chat_id, f"🏁 **Іспит завершено!**\nТвій результат: {score} з {len(QUIZ)} правильних відповідей. Рюк задоволений.")
         return
 
     question_data = QUIZ[q_index]
     markup = types.InlineKeyboardMarkup()
-    for option in question_data["options"]:
-        markup.add(types.InlineKeyboardButton(text=option, callback_data=f"q_{q_index}_{score}_{option}"))
+    
+    # Замість тексту передаємо в callback_data тільки ІНДЕКС варіанту (0, 1 або 2)
+    for i, option in enumerate(question_data["options"]):
+        markup.add(types.InlineKeyboardButton(text=option, callback_data=f"q_{q_index}_{score}_{i}"))
         
     bot.send_message(chat_id, question_data["question"], reply_markup=markup)
 
@@ -83,15 +90,16 @@ def handle_quiz_answer(call):
     data_parts = call.data.split('_')
     q_index = int(data_parts[1])
     score = int(data_parts[2])
-    user_answer = call.data.replace(f"q_{q_index}_{score}_", "")
+    opt_index = int(data_parts[3]) 
 
     bot.answer_callback_query(call.id)
     
-    if user_answer == QUIZ[q_index]["right"]:
+    # Порівнюємо індекс натиснутої кнопки
+    if opt_index == QUIZ[q_index]["right_index"]:
         score += 1
-        bot.send_message(call.message.chat.id, "🟢 Правильно!")
+        bot.send_message(call.message.chat.id, "🟢 Абсолютно вірно!")
     else:
-        bot.send_message(call.message.chat.id, f"🔴 Невірно!")
+        bot.send_message(call.message.chat.id, "🔴 Неправильно! Бог смерті розчарований.")
         
     start_quiz(call.message.chat.id, q_index + 1, score)
 
